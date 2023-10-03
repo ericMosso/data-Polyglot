@@ -1,0 +1,64 @@
+---
+title: "Polyglot Data Analysis"
+author: "Eric Mossotti"
+format: html
+echo: false
+code-fold: true
+code-tools: true
+editor: visual
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r}
+
+library(RPostgreSQL)
+library(DBI)
+
+# Reading in a Kaggle csv made for Heart Disease Prediction.
+
+# Creates a dataframe to be used later when we create a SQL database table from it.
+
+heartDF <- read.csv2 ( "Heart_Disease_Prediction.csv", 
+                       header = TRUE, 
+                       sep = "," )
+
+# Establishing a connection with a local PostgreSQL database.
+
+con <- dbConnect ( odbc::odbc(), 
+                   "PostgreSQL35W", 
+                   timeout = 10 )
+
+
+# Using dbWriteTable() to create a table from the dataframe
+
+
+dbWriteTable ( con, 
+               "HeartTable", 
+               heartDF, 
+               row.names = FALSE, 
+               append = TRUE )
+
+
+
+
+
+
+
+```
+
+```{python}
+
+
+
+
+
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
