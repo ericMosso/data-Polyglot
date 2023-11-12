@@ -1,22 +1,37 @@
 ---
-title: "Polyglot Data Analysis"
+title: "Data Analysis with Quarto Documents"
 author: "Eric Mossotti"
+engine: knitr
 format: html
-code-fold: true
-code-tools: true
-editor: visual
+page-layout: full
+theme:
+  light: flatly 
+  dark: darkly
+execute: 
+  echo: false
+bibliography: bibliography.bib
+#server: shiny
 ---
 
-## Quarto
+-   Reproducible data environment project.
 
+-   Quarto documents for multilingual data analysis publishing.
+
+## Connecting to a SQL Database for Fun
+
+I wanted to try setting up a SQL database, then connect to it.
 
 ```{r}
+#| warning: false
 
-library(RPostgreSQL)
-library(DBI)
-library(dplyr)
+library ( RPostgreSQL )
+library ( DBI )
+library ( dplyr )
+library ( kableExtra )
 
-# Reading in a Kaggle csv made for Heart Disease Prediction.
+library ( reticulate )
+
+# Reading in a dataset I found originally on Kaggle about Heart Disease Prediction.
 
 # Creates a dataframe to be used later when we create a SQL database table from it.
 
@@ -24,46 +39,204 @@ heartDF <- read.csv2 ( "Heart_Disease_Prediction.csv",
                        header = TRUE, 
                        sep = "," )
 
-# Establishing a connection with a local PostgreSQL database.
+# Establishing a connection with a cloud-based PostgreSQL database. 
+
+# Using Google Cloud: SQL
+
 
 con <- dbConnect ( odbc::odbc(), 
-                   "PostgreSQL35W", 
+                   "googleSQL",
                    timeout = 10 )
 
+# copy_to ( remote data source, local data frame )
 
-# Using dbWriteTable() to create a table from the dataframe
+copy_to ( con, heartDF )
 
+```
 
-dbWriteTable ( con, 
-               "HeartTable", 
-               heartDF, 
-               row.names = FALSE, 
-               append = TRUE )
+## Using dplyr syntax to query the SQL database
 
+"dbplyr is designed to work with database tables as if they were local data frames."
 
+\- [dbplyr.tidyverse.org](https://dbplyr.tidyverse.org/)
 
-# Using dplyr to select a table from the PostgreSQL database
+```{r}
+#| warning: false
+#| label: tbl-heart_table
+#| tbl-cap: "Heart Disease Table"
 
-heartTable_dplyr <- tbl ( con, "HeartTable" )
+heart_table <- tbl ( con, "heartDF" )
 
-# Querying the table with dplyr and piping function operator
-
-# Grouping by the presence or absence of heart disease, 
-# and calculating the average BP of those groups.
-
-heartTable_dplyr %>% 
-  group_by ( Heart.Disease ) %>%
-  summarize ( BP_AVERAGE = mean ( BP ) ) %>%
+kable ( head ( heart_table ) ) |>
   
-  # Creates a dataframe from the results of the query above.
+  # No need to specify input because we are piping this to the above function
   
-  collect()
+  kable_styling ( position = 'center', full_width = TRUE )
+
+
+```
+
+@tbl-heart_table
+
+[@misc_heart_disease_45]
+
+```{r}
+#| warning: false
+
+
+fullRdf <- as.data.frame ( heart_table )
+
+```
+
+Transforming the data from the database and outputting to a table.
+
+```{r}
+#| warning: false
+#| label: tbl-bpQuery
+#| tbl-cap: "Blood Pressure and Heart Disease"
+
+# Using dplyr functions to query a table from my local PostgreSQL database
+
+# dplyr functions closely mirror SQL functions and are capable of querying
+# SQL databases
+
+
+bpQuery <- heart_table |>
+  
+  # column name in the data, has to be exact syntax (no spaces in between)
+  
+  # I want to compare average blood pressure in those known to have 
+  # heart disease vs those who are known to not have heart disease.
+
+  group_by ( Heart.Disease ) |>
+  
+  # Creates a new dataframe, BP_AVERAGE
+  
+  # Summarize functions accompany grouping functions.
+
+  summarize ( BP_AVERAGE = mean ( BP ) ) 
+
+# Displays the SQL syntax translation that was executed directly from the dplyr syntax above
+
+
+```
+
+@tbl-bpQuery
+
+```{r}
+#| warning: false
+
+rQueryDF <- as.data.frame ( bpQuery )
+rQueryDF
+```
+
+What does that translate to in SQL syntax?
+
+```{r}
+#| warning: false
+
+bpQuery |> show_query ()
+```
+
+Formatted output table with kable() looks cleaner than a tibble.
+
+```{r}
+#| warning: false
+
+# The output will be a tibble by default, but we can make it a kable output.
+
+kable ( head ( bpQuery ) ) |>
+  
+  # No need to specify input because we are piping this to the above function
+  
+  kable_styling ( position = 'center' )
+
+```
+
+We collect() the results by executing the queries above. Queries are not actually executed on the database until now.
+
+[@DTPLYR]"A lazy data.table lazy captures the intent of dplyr verbs, only actually performing computation when requested (with [`collect()`](https://dplyr.tidyverse.org/reference/compute.html), [`pull()`](https://dplyr.tidyverse.org/reference/pull.html), [`as.data.frame()`](https://rdrr.io/r/base/as.data.frame.html), [`data.table::as.data.table()`](https://rdatatable.gitlab.io/data.table/reference/as.data.table.html), or [`tibble::as_tibble()`](https://tibble.tidyverse.org/reference/as_tibble.html)."
+
+[![Query Table Structure](images/lazyQueryRstudio-02.png){#fig-Table_Properties fig-alt="Database Table Structure"}](Table_Properties)
+
+@fig-Table_Properties
+
+ggPlot is used to directly generate a graph from the query results, which R treats as a dataframe object.
+
+```{r}
+#| warning: false
+
+library ( ggplot2 )
+
+
+# Collect() is required to execute the query above and display the results.
+
+#bpQuery |> 
+  
+#  collect () |>
+  
+#  ggplot ( aes ( x = Heart.Disease, y = BP_AVERAGE ) ) +
+  
+#  geom_bar ( stat = 'identity' )
+
+
+```
+
+@tbl-bpQuery
+
+```{r}
+#| warning: false
 
 
 
 
+```
 
+This tells python that we are dealing with a R object, so it will convert it to an pandas dataframe by default?
 
+We apply python's describe () function to generate some summary statistics.
+
+```{python}
+
+import pandas as pd
+
+import numpy as np
+
+# Tells python we are working with an R object, but we want to convert to Python.
+
+heartTable_py = r.fullRdf
+
+# Some summary statistics with Python.
+
+heartTable_py.describe ()
+```
+
+Converting table back to an R object, applying R's summary function for quick stats for every column of the dataset.
+
+------------------------------------------------------------------------
+
+```{r}
+#| warning: false
+
+# Tells R we are working with a Python object, but we want ot convert to R.
+
+# Some summary statistics with R.
+
+summary ( py$heartTable_py )
+```
+
+------------------------------------------------------------------------
+
+## A Comparison of populations with and without Heart Disease.
+
+-   Categorical values will come from columns that represent distinct groups that are non-scalar.
+
+-   Numerical values can come from columns that represent scalars.
+
+-   Choose your dependent variable ?
+
+```{r}
+#| warning: false
 
 
 
@@ -74,6 +247,4 @@ heartTable_dplyr %>%
 
 
 
-
 ```
-
